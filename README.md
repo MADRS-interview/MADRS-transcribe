@@ -1,19 +1,11 @@
 # MADRS Interview Transcription
 
-A repository to implement the transcription pipeline for MADRS.
+A repository to implement the transcription pipeline for MADRS automation.
 
 ## Usage
 
-A conda environment with required dependencies can be initialized by running
-`conda env create -f environment.yml` from the repository root. You can activate
-the new environment by running `conda activate MADRS-transcribe`.
-
-Audio files to be transcribed should be placed in `data/interviews/audio`. The
-transcription pipeline can then by run by running the python script
-`/scripts/transcribe.py`, or run `git transcribe` after initializing the
-repository with the script described below. Transcripts will appear in
-`data/interviews/transcripts`.
-
-### `git` aliases
-Run the script `/scripts/init-repo` to configure aliases local to this
-repository to run key data ops.
+A conda environment with the required dependencies is specified with the
+included `environment.yml` and `requirements.txt` files. Initialize this
+environment by running `conda env create -f environment.yml` followed by `pip -r
+requirements.txt` run from the repository root. You can then activate the new
+environment by running `conda activate MADRS-transcribe`.
