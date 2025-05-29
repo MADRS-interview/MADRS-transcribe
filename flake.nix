@@ -64,6 +64,26 @@
 								langchain-openai
 								langgraph
 							]))
+						];
+						inherit shellHook;
+					};
+				notebookServer = let
+					pkgs  = import nixpkgs {
+						system = system;
+				};
+				in pkgs.mkShell {
+						buildInputs = with pkgs; [
+							(python3.withPackages ( ps: with ps; [
+								ipython
+								ipykernel
+								langchain
+								langchain-community
+								langchain-huggingface
+								langchain-openai
+								langgraph
+								matplotlib
+								pandas
+							]))
 							jupyter
 						];
 						inherit shellHook;
