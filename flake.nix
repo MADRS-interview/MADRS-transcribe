@@ -3,91 +3,72 @@
 
 	inputs = {
 		nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+		flake-utils.url = "github:numtide/flake-utils";
+		expy-flake.url = "github:KerryCerqueira/expy";
 	};
 
 	outputs =
-		{ self, nixpkgs }:
-		let
-			system = "x86_64-linux";
-			cudaDriverPath = "/usr/lib/x86_64-linux-gnu/libcuda.so.1";
-			shellHook = # bash
-				''
+		{ nixpkgs, flake-utils, expy-flake, ... }:
+		flake-utils.lib.eachDefaultSystem (system:
+			let
+				shellHook = # bash
+					''
 				python -m ipykernel install --user --name nix
 				'';
-		in
-			{
-			devShells.${system} = {
-				cudaInference = let
-					pkgs = import nixpkgs {
-						system = system;
-						config.allowUnfree = true;
-						config.cudaSupport = true;
-					};
-				in pkgs.mkShell {
-						buildInputs = with pkgs; [
-							(python3.withPackages ( ps: with ps; [
-								torch
-								transformers
-								llama-cpp-python
-								ipython
-								ipykernel
-								langchain
-								langchain-community
-								langchain-huggingface
-								langgraph
-								langsmith
-								fastapi
-								uvicorn
-								sse-starlette
-								starlette-context
-								pydantic-settings
-								psutil
-								numpy diskcache
-							]))
-							jupyter
-						];
-						LD_PRELOAD = cudaDriverPath;
-						inherit shellHook;
-					};
-				langchainDev = let
-					pkgs  = import nixpkgs {
-						system = system;
+				skipSentenceTests = self: super: {
+					# Extend the per-interpreter overrides
+					pythonPackagesExtensions = (super.pythonPackagesExtensions or []) ++ [
+						(pySelf: pySuper: {
+							sentence-transformers = pySuper.sentence-transformers.overrideAttrs (old: {
+								disabledTests = (old.disabledTests or []) ++ [
+									# Fails on Nix builders ⇒ skip it
+									"test_performance_with_large_vectors"
+								];
+							});
+						})
+					];
 				};
-				in pkgs.mkShell {
-						buildInputs = with pkgs; [
-							(python3.withPackages ( ps: with ps; [
-								ipython
-								ipykernel
-								langchain
-								langchain-community
-								langchain-huggingface
-								langchain-openai
-								langgraph
-							]))
-						];
-						inherit shellHook;
-					};
-				notebookServer = let
-					pkgs  = import nixpkgs {
-						system = system;
+			in {
+				devShells = {
+					cudaInference = let
+						pkgs = import nixpkgs {
+							system = system;
+							config.allowUnfree = true;
+							config.cudaSupport = true;
+							overlays = [
+								expy-flake.overlays.${system}.default
+								skipSentenceTests
+							];
+						};
+						cudaDriverPath = "/usr/lib/x86_64-linux-gnu/libcuda.so.1";
+					in pkgs.mkShell {
+							buildInputs = with pkgs; [
+								(python3.withPackages ( ps: with ps; [
+									expy
+									torch
+									llama-cpp-python
+									ipython
+									ipykernel
+									langchain
+									langchain-community
+									langchain-huggingface
+									langgraph
+									langsmith
+									pip
+									fastapi
+									uvicorn
+									sse-starlette
+									starlette-context
+									pydantic-settings
+									psutil
+									numpy
+									diskcache
+								]))
+							];
+							LD_PRELOAD = cudaDriverPath;
+							inherit shellHook;
+						};
 				};
-				in pkgs.mkShell {
-						buildInputs = with pkgs; [
-							(python3.withPackages ( ps: with ps; [
-								ipython
-								ipykernel
-								langchain
-								langchain-community
-								langchain-huggingface
-								langchain-openai
-								langgraph
-								matplotlib
-								pandas
-							]))
-							jupyter
-						];
-						inherit shellHook;
-					};
-			};
-		};
+			}
+		);
 }
