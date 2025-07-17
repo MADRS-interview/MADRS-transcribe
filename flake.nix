@@ -10,10 +10,11 @@
 		{ nixpkgs, flake-utils, expy-flake, tgi-flake, ... }:
 		flake-utils.lib.eachDefaultSystem (system:
 			let
-				shellHook = # bash
-					''
-				python -m ipykernel install --user --name nix
-				'';
+				cudaPkgs = import nixpkgs {
+					system = system;
+					config.allowUnfree = true;
+					config.cudaSupport = true;
+				};
 				skipSentenceTests = self: super: {
 					pythonPackagesExtensions = (super.pythonPackagesExtensions or []) ++ [
 						(pySelf: pySuper: {
@@ -49,7 +50,10 @@
 									jupyter
 							]))
 							];
-							inherit shellHook;
+							shellHook = # bash
+								''
+								python -m ipykernel install --user --name nix
+								'';
 						};
 					LlamaInference = let
 						pkgs = import nixpkgs {
