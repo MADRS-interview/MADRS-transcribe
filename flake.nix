@@ -1,14 +1,13 @@
 {
-	description = "Devshells for AI development at IMHR.";
-
+	description = "AI infrastructure for IMHR.";
 	inputs = {
-		nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+		nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
 		flake-utils.url = "github:numtide/flake-utils";
 		expy-flake.url = "github:KerryCerqueira/expy";
+		tgi-flake.url = "github:huggingface/text-generation-inference";
 	};
-
 	outputs =
-		{ nixpkgs, flake-utils, expy-flake, ... }:
+		{ nixpkgs, flake-utils, expy-flake, tgi-flake, ... }:
 		flake-utils.lib.eachDefaultSystem (system:
 			let
 				shellHook = # bash
@@ -16,12 +15,10 @@
 				python -m ipykernel install --user --name nix
 				'';
 				skipSentenceTests = self: super: {
-					# Extend the per-interpreter overrides
 					pythonPackagesExtensions = (super.pythonPackagesExtensions or []) ++ [
 						(pySelf: pySuper: {
 							sentence-transformers = pySuper.sentence-transformers.overrideAttrs (old: {
 								disabledTests = (old.disabledTests or []) ++ [
-									# Fails on Nix builders ⇒ skip it
 									"test_performance_with_large_vectors"
 								];
 							});
@@ -30,44 +27,70 @@
 				};
 			in {
 				devShells = {
-					cudaInference = let
+					expy = let
 						pkgs = import nixpkgs {
 							system = system;
-							config.allowUnfree = true;
-							config.cudaSupport = true;
 							overlays = [
 								expy-flake.overlays.${system}.default
 								skipSentenceTests
 							];
 						};
-						cudaDriverPath = "/usr/lib/x86_64-linux-gnu/libcuda.so.1";
 					in pkgs.mkShell {
 							buildInputs = with pkgs; [
 								(python3.withPackages ( ps: with ps; [
 									expy
-									torch
-									llama-cpp-python
-									ipython
-									ipykernel
 									langchain
 									langchain-community
 									langchain-huggingface
+									langchain-openai
 									langgraph
-									langsmith
-									pip
+									matplotlib
+									pandas
+									jupyter
+							]))
+							];
+							inherit shellHook;
+						};
+					LlamaInference = let
+						pkgs = import nixpkgs {
+							system = system;
+							config.allowUnfree = true;
+							config.cudaSupport = true;
+						};
+						cudaDriverPath = "/usr/lib/x86_64-linux-gnu/libcuda.so.1";
+					in pkgs.mkShell {
+							buildInputs = with pkgs; [
+								(python3.withPackages ( ps: with ps; [
+									diskcache
 									fastapi
-									uvicorn
+									huggingface-hub
+									llama-cpp-python
+									numpy
+									psutil
+									pydantic-settings
 									sse-starlette
 									starlette-context
-									pydantic-settings
-									psutil
-									numpy
-									diskcache
+									uvicorn
 								]))
 							];
 							LD_PRELOAD = cudaDriverPath;
-							inherit shellHook;
 						};
+				};
+				apps = {
+					llamaServer = let
+						pkgs = import nixpkgs {
+							system = system;
+							overlays = [
+								expy-flake.overlays.${system}.default
+								skipSentenceTests
+							];
+						};
+						in {
+						type = "app";
+						program = "${pkgs.llama-cpp}/bin/llama-server";
+					};
+					hfServer = flake-utils.lib.mkApp { drv = tgi-flake.packages.${system}.default; };
+					expy = flake-utils.lib.mkApp { drv = expy-flake.packages.${system}.default; };
 				};
 			}
 		);
