@@ -1,7 +1,7 @@
 {
 	description = "AI infrastructure for IMHR.";
 	inputs = {
-		nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
+		nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 		flake-utils.url = "github:numtide/flake-utils";
 		expy-flake.url = "github:KerryCerqueira/expy";
 		tgi-flake.url = "github:huggingface/text-generation-inference";
@@ -10,6 +10,7 @@
 		{ nixpkgs, flake-utils, expy-flake, tgi-flake, ... }:
 		flake-utils.lib.eachDefaultSystem (system:
 			let
+				cudaDriverPath = "/usr/lib/x86_64-linux-gnu/libcuda.so.1";
 				cudaPkgs = import nixpkgs {
 					system = system;
 					config.allowUnfree = true;
@@ -40,11 +41,7 @@
 							buildInputs = with pkgs; [
 								(python3.withPackages ( ps: with ps; [
 									expy
-									langchain
-									langchain-community
-									langchain-huggingface
-									langchain-openai
-									langgraph
+									huggingface-hub
 									matplotlib
 									pandas
 									jupyter
@@ -56,12 +53,7 @@
 								'';
 						};
 					LlamaInference = let
-						pkgs = import nixpkgs {
-							system = system;
-							config.allowUnfree = true;
-							config.cudaSupport = true;
-						};
-						cudaDriverPath = "/usr/lib/x86_64-linux-gnu/libcuda.so.1";
+						pkgs = cudaPkgs;
 					in pkgs.mkShell {
 							buildInputs = with pkgs; [
 								(python3.withPackages ( ps: with ps; [
@@ -82,17 +74,16 @@
 				};
 				apps = {
 					llamaServer = let
-						pkgs = import nixpkgs {
-							system = system;
-							overlays = [
-								expy-flake.overlays.${system}.default
-								skipSentenceTests
-							];
+						pkgs = cudaPkgs;
+						llamaServerWrapped = pkgs.writeShellApplication {
+							name = "llama-server";
+							runtimeInputs = [ pkgs.llama-cpp ];
+							text = ''
+								export LD_PRELOAD=${cudaDriverPath}
+								exec ${pkgs.llama-cpp}/bin/llama-server "$@"
+							'';
 						};
-						in {
-						type = "app";
-						program = "${pkgs.llama-cpp}/bin/llama-server";
-					};
+					in flake-utils.lib.mkApp { drv = llamaServerWrapped; };
 					hfServer = flake-utils.lib.mkApp { drv = tgi-flake.packages.${system}.default; };
 					expy = flake-utils.lib.mkApp { drv = expy-flake.packages.${system}.default; };
 				};
