@@ -42,6 +42,7 @@
 								(python3.withPackages ( ps: with ps; [
 									expy
 									huggingface-hub
+									hf-xet
 									matplotlib
 									pandas
 									jupyter
@@ -52,7 +53,7 @@
 								python -m ipykernel install --user --name nix
 								'';
 						};
-					LlamaInference = let
+					llamaInference = let
 						pkgs = cudaPkgs;
 					in pkgs.mkShell {
 							buildInputs = with pkgs; [
@@ -73,6 +74,7 @@
 						};
 				};
 				apps = {
+					expy = flake-utils.lib.mkApp { drv = expy-flake.packages.${system}.default; };
 					llamaServer = let
 						pkgs = cudaPkgs;
 						llamaServerWrapped = pkgs.writeShellApplication {
@@ -85,7 +87,27 @@
 						};
 					in flake-utils.lib.mkApp { drv = llamaServerWrapped; };
 					hfServer = flake-utils.lib.mkApp { drv = tgi-flake.packages.${system}.default; };
-					expy = flake-utils.lib.mkApp { drv = expy-flake.packages.${system}.default; };
+					owuiServer = let
+						pkgs = import nixpkgs {
+							inherit system;
+							config.allowUnfree = true;
+						};
+						runner = pkgs.writeShellScriptBin "openwebui" ''
+							set -euo pipefail
+
+							: ''${XDG_DATA_HOME:="$HOME/.local/share"}
+							: ''${DATA_DIR:="$XDG_DATA_HOME/open-webui"}
+							mkdir -p "''${DATA_DIR}"
+							export DATA_DIR
+							: ''${PORT:=8082}
+
+							exec ${pkgs.open-webui}/bin/open-webui serve \
+							--host 0.0.0.0 --port "''${PORT}" "$@"
+						'';
+					in {
+						type = "app";
+						program = "${runner}/bin/openwebui";
+					};
 				};
 			}
 		);
