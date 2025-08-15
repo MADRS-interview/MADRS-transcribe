@@ -86,7 +86,18 @@
 							'';
 						};
 					in flake-utils.lib.mkApp { drv = llamaServerWrapped; };
-					hfServer = flake-utils.lib.mkApp { drv = tgi-flake.packages.${system}.default; };
+					hfServer = let
+						pkgs = cudaPkgs;
+						tgi = tgi-flake.packages.${system}.default;
+						hfServerWrapped = pkgs.writeShellApplication {
+							name = "tgi-server";
+							runtimeInputs = [ tgi ];
+							text = ''
+								export LD_PRELOAD=${cudaDriverPath}
+								exec ${pkgs.lib.getExe tgi} "$@"
+							'';
+						};
+					in flake-utils.lib.mkApp { drv = hfServerWrapped; };
 					owuiServer = let
 						pkgs = import nixpkgs {
 							inherit system;
